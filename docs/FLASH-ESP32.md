@@ -1,5 +1,39 @@
 # Flasher l’ATtiny45 avec un ESP32 et Arduino IDE
 
+Ce guide sert à **mettre le programme ManCloud dans la petite puce ATtiny45 du PCB overclock**. On prépare d’abord un ESP32 pour qu’il serve de programmateur, puis on le relie à la carte avec six fils.
+
+Vous pouvez télécharger tout le dépôt avec **Code → Download ZIP**, puis le décompresser. Ouvrez le dossier obtenu pour retrouver les fichiers cités dans ce guide.
+
+## Les mots à connaître avant de commencer
+
+| Mot | En clair |
+|---|---|
+| Flasher / programmer | Copier un programme dans une puce |
+| Firmware | Le programme qui fera fonctionner la carte overclock |
+| Sketch | Le programme Arduino chargé dans l’ESP32 |
+| ISP | Une méthode de programmation par plusieurs fils, utilisée ici entre l’ESP32 et l’ATtiny |
+| AVRDUDE | Le logiciel sur l’ordinateur qui envoie le firmware à l’ATtiny, en passant par l’ESP32 |
+| GPIO | Une entrée ou une sortie de l’ESP32, repérée par un numéro |
+| Flash | La mémoire de l’ATtiny qui contient son programme |
+| EEPROM | Une autre mémoire où le programme peut conserver des réglages |
+| Fusibles / fuses | Des réglages internes de la puce ; ce ne sont pas des composants à souder ou à remplacer |
+| LFUSE / HFUSE / EFUSE | Trois groupes de ces réglages internes |
+| HEX | Le fichier contenant le programme prêt à être envoyé à l’ATtiny |
+
+**Les deux programmes ne vont pas au même endroit :** le fichier `.ino` va dans l’ESP32 avec Arduino IDE ; le fichier `.hex` de ManCloud va dans l’ATtiny avec AVRDUDE. Il ne faut pas charger le firmware N64 directement dans l’ESP32.
+
+## Le parcours, dans l’ordre
+
+1. Charger le sketch dans l’ESP32.
+2. Relier l’ESP32 à la carte overclock, sans la N64.
+3. Préparer le fichier HEX de ManCloud.
+4. Vérifier que l’ordinateur reconnaît l’ATtiny.
+5. Sauvegarder, écrire le programme, puis vérifier son contenu.
+6. Régler l’horloge de l’ATtiny et refaire les contrôles.
+7. Changer le dernier réglage, qui ferme ensuite cet accès de programmation.
+
+**Gardez cet ordre.** Si un contrôle échoue, arrêtez-vous à cette étape pour comprendre le problème avant de continuer.
+
 ## Pourquoi on a changé de programmateur
 
 Avec l’USBasp, l’ATtiny45 répondait avec la signature `1E 92 06`. Le firmware de 368 octets avait été écrit et vérifié. Après l’écriture de **LFUSE = `0xE4`**, la cible ne répondait plus à cet adaptateur, même après plusieurs essais de ralentissement.
@@ -18,6 +52,11 @@ La fiche [Microchip ATtiny25/45/85](https://ww1.microchip.com/downloads/en/Devic
 Programmer la carte **déconnectée de la N64**, pour ne pas piloter le CPU ou le circuit RESET de la console par les lignes ISP. Utiliser une alimentation cible 3,3 V et une masse commune. Si la broche 3V3 du DevKit alimente ce petit PCB seul, ne pas connecter en parallèle une autre alimentation. Ne jamais envoyer du 5 V vers les GPIO ESP32.
 
 ## 2. Charger le sketch dans l’ESP32
+
+L’ESP32 joue le rôle d’un pont entre l’ordinateur et l’ATtiny. À cette étape, branchez seulement l’ESP32 en USB à l’ordinateur : le bouton de téléversement d’Arduino IDE programme **l’ESP32**.
+
+Si les cartes ESP32 ne sont pas encore disponibles dans Arduino IDE, suivez l’[installation officielle du support ESP32](https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html). Dans le gestionnaire de cartes, le paquet s’appelle **esp32**, par **Espressif Systems**. Le sketch de ce dépôt a été compilé avec la version **3.3.7**.
+
 
 1. Ouvrir `programming/ESP32_AVR_ISP/ESP32_AVR_ISP.ino` dans Arduino IDE.
 2. Sélectionner la carte correspondant à l’ESP32-WROOM-32, par exemple **ESP32 Dev Module**, et son port USB.
@@ -44,6 +83,26 @@ Les nombres gravés `1`, `4`, `5`, `6`, `7`, `8` désignent les broches de l’A
 
 ## 4. Récupérer et compiler le firmware ManCloud
 
+**Compiler**, c’est transformer le code écrit par l’auteur en fichier `.hex` que comprend l’ATtiny. Ce dépôt ne contient pas ce HEX : on le prépare depuis les sources de ManCloud, avec la version précise ci-dessous.
+
+Les blocs de commandes de cette étape et des suivantes se saisissent dans le **Terminal de l’ordinateur**, pas dans Arduino IDE et pas dans le moniteur série. Sur Mac, ouvrez l’application Terminal. Copiez les lignes sans ajouter de symbole devant, puis appuyez sur Entrée. Dans les commandes sur plusieurs lignes, le caractère `\` permet de continuer sur la ligne suivante : copiez le bloc entier.
+
+### Les outils nécessaires sur l’ordinateur
+
+Il faut **Git**, **make**, **avr-gcc**, **avr-objcopy**, **avr-size** et **avrdude**. Arduino IDE seul ne garantit pas que ces commandes soient disponibles dans le Terminal. Si le Terminal affiche `command not found`, l’outil indiqué manque ou n’est pas accessible ; réglez cela avant de poursuivre.
+
+Sur un Mac où [Homebrew](https://brew.sh/) est déjà installé, les outils AVR sont proposés par le [dépôt Homebrew AVR de l’équipe osx-cross](https://github.com/osx-cross/homebrew-avr). Les commandes d’installation sont :
+
+```sh
+brew tap osx-cross/avr
+brew install avr-gcc avrdude
+```
+
+Git et make sont notamment disponibles avec les outils de ligne de commande Apple (`xcode-select --install`, puis suivre la fenêtre d’installation). Ces instructions concernent macOS ; sur Windows ou Linux, il faut installer les mêmes outils avec une méthode adaptée au système.
+
+### Préparer le HEX
+
+
 Les sources locales retrouvées correspondent à la révision `e2d35d55d54be86a5c34685d3ce0b6f555409846` de [ManCloud/n64_overclock](https://github.com/ManCloud/n64_overclock/tree/e2d35d55d54be86a5c34685d3ce0b6f555409846). Le source est GPL-2.0-only. Avec Git, make et les outils AVR (`avr-gcc`, `avr-objcopy`, `avr-size`) disponibles :
 
 ```sh
@@ -59,20 +118,23 @@ Le résultat attendu est `n64_overclock_t45_2_0X_CC.hex`, pour une LED à **cath
 
 ## 5. Choisir le port et lire la cible
 
+Le **port** est le nom sous lequel l’ordinateur voit la connexion USB de l’ESP32. Il change d’un ordinateur à l’autre. Pour le reconnaître, comparez la liste avant et après avoir branché l’ESP32, ou regardez **Outils → Port** dans Arduino IDE. Fermez ensuite le moniteur série.
+
+
 Sur macOS, repérer le port de l’ESP32 :
 
 ```sh
 ls /dev/cu.*
 ```
 
-Définir `PORT` avec le vrai port affiché. Exemple à remplacer :
+Remplacez `/dev/cu.usbserial-XXXX` ci-dessous par le vrai port affiché. La première ligne mémorise ce nom dans `PORT`, un raccourci réutilisé par les commandes suivantes. Gardez la même fenêtre Terminal ; si vous la fermez, il faudra redéfinir `PORT`. Exemple à adapter :
 
 ```sh
 PORT=/dev/cu.usbserial-XXXX
 avrdude -c stk500v1 -p t45 -P "$PORT" -b 19200 -v
 ```
 
-Attendre la signature **`0x1e9206`**. Puis lire les fusibles et sauvegarder l’état existant avant un effacement :
+**Résultat attendu :** AVRDUDE doit afficher la signature **`0x1e9206`**. Cette signature est l’identifiant du modèle ATtiny45. Si elle est différente, absente ou composée seulement de zéros, ne passez pas à l’écriture : vérifiez la puce et les fils. Puis lire les fusibles et sauvegarder l’état existant avant un effacement :
 
 ```sh
 avrdude -c stk500v1 -p t45 -P "$PORT" -b 19200 \
@@ -84,6 +146,9 @@ avrdude -c stk500v1 -p t45 -P "$PORT" -b 19200 \
 Sur notre première carte, les lectures initiales étaient `LFUSE=0x62`, `HFUSE=0xDF`, `EFUSE=0xFF`. Ce sont des observations historiques, pas des valeurs à écrire automatiquement sur chaque puce.
 
 ## 6. Écrire et vérifier la flash, avant les fusibles
+
+La commande contenant `flash:w` **écrit** le programme. Celle contenant `flash:v` le **vérifie**, en comparant ce qui est dans la puce avec le fichier. Une commande terminée ne suffit pas : son message de fin doit confirmer la réussite, sans erreur de vérification.
+
 
 Depuis le dossier où se trouve le HEX compilé :
 
@@ -98,6 +163,9 @@ L’écriture de la flash peut effacer l’EEPROM selon la configuration d’eff
 
 ## 7. Passer l’ATtiny à 128 kHz, puis contrôler
 
+On règle maintenant l’horloge interne de la puce, c’est-à-dire le rythme auquel elle fonctionne. **`LFUSE = 0xE4` la fait travailler lentement, à 128 kHz.** C’est pour cela que le programmateur doit lui aussi parler assez lentement. Cette étape ne change pas directement la vitesse du processeur de la N64 : elle concerne l’ATtiny de notre petite carte.
+
+
 ```sh
 avrdude -c stk500v1 -p t45 -P "$PORT" -b 19200 -U lfuse:w:0xE4:m
 avrdude -c stk500v1 -p t45 -P "$PORT" -b 19200 \
@@ -109,6 +177,18 @@ avrdude -c stk500v1 -p t45 -P "$PORT" -b 19200 \
 Le sketch garde son SPI logiciel lent après ce changement. Le paramètre AVRDUDE `-B` n’est pas ce qui fixe cette vitesse : c’est `SPI_HALF_PERIOD_US` dans le sketch. Pour un SCK encore plus lent, augmenter cette valeur puis retéléverser le sketch dans l’ESP32. Si la signature disparaît à cette étape, résoudre le problème **avant HFUSE**.
 
 ## 8. HFUSE en toute dernière étape
+
+**C’est le point à bien comprendre avant de lancer la dernière commande.** Pendant le flash, une patte de l’ATtiny sert d’entrée RESET au programmateur. Pour le mod N64, le firmware a besoin d’utiliser cette même patte comme entrée du bouton de la console. On change donc son rôle avec `HFUSE`.
+
+Avant de continuer, vous devez avoir obtenu :
+
+- La bonne signature ATtiny45.
+- Le programme écrit et vérifié sans erreur.
+- `LFUSE` relu à `0xE4`.
+- Une nouvelle vérification du programme réussie après ce changement.
+
+Après cette dernière commande, **le branchement ESP32 décrit ici ne permet plus de modifier le programme**. Pour rouvrir cet accès, il faut un autre type de programmateur et une procédure spéciale, appelée **HVSP** (programmation série à haute tension). Ce n’est pas une option à activer dans Arduino IDE.
+
 
 Le firmware utilise PB5 comme entrée du bouton RESET. Pour cela, ManCloud demande **HFUSE=`0x5F`**, qui programme `RSTDISBL`.
 
@@ -123,6 +203,14 @@ avrdude -c stk500v1 -p t45 -P "$PORT" -b 19200 -U hfuse:w:0x5F:m
 Ne pas prévoir une nouvelle session ISP après sortie du mode programmation : son échec peut être normal avec RESET désactivé. Conserver le journal de la dernière écriture. En cas d’erreur pendant cette écriture, ne pas conclure à sa réussite sans diagnostic.
 
 Couper l’alimentation, débrancher l’ESP32, puis installer la carte dans la N64 selon le câblage adapté à sa révision. Ne pas tenter de communiquer en ISP avec la console raccordée.
+
+## Après le flash : avant le montage dans la console
+
+Débranchez les six fils du programmateur. L’ESP32 a terminé son travail et ne doit pas rester relié à la N64.
+
+Pour souder la carte, les noms des pastilles sont expliqués dans le [README](../README.md#repères-du-pcb). **Les photos du petit PCB ne suffisent pas à repérer les soudures sur une carte mère de N64.** Il faut vérifier sa révision et utiliser une documentation d’installation correspondante, notamment pour les pattes CPU 112/116 et la séparation entre le bouton RESET et le circuit PIF.
+
+Ne choisissez pas une couleur de LED comme preuve de la vitesse réelle : les couleurs dépendent du branchement. Vérifiez le fonctionnement obtenu sur la console.
 
 ## Dépannage rapide
 
